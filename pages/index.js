@@ -96,26 +96,23 @@ export default function Home() {
   }, [isLoading]);
 
   const insertMessageAfterId = (targetId, message) => {
-    setMessages(prev => {
-      const index = prev.findIndex(m => m.id === targetId);
-      if (index === -1) {
-        const next = [...prev, message];
-        messagesRef.current = next;
-        return next;
-      }
-      const next = [...prev];
+    const current = messagesRef.current;
+    const index = current.findIndex(m => m.id === targetId);
+    let next;
+    if (index === -1) {
+      next = [...current, message];
+    } else {
+      next = [...current];
       next.splice(index + 1, 0, message);
-      messagesRef.current = next;
-      return next;
-    });
+    }
+    messagesRef.current = next;
+    setMessages(next);
   };
 
   const appendMessage = (message) => {
-    setMessages(prev => {
-      const next = [...prev, message];
-      messagesRef.current = next;
-      return next;
-    });
+    const next = [...messagesRef.current, message];
+    messagesRef.current = next;
+    setMessages(next);
   };
 
   const processQueue = async () => {
@@ -131,9 +128,19 @@ export default function Home() {
     const messagesForRequest = targetIndex === -1 ? snapshot : snapshot.slice(0, targetIndex + 1);
 
     // Filter out the welcome message (UI-only) and error messages before sending to API
-    const apiMessages = messagesForRequest
+    const filtered = messagesForRequest
       .filter(m => m.id !== WELCOME_MESSAGE.id && !m.isError)
       .map(m => ({ role: m.role, content: m.content }));
+
+    // Merge consecutive same-role messages (can happen after filtering errors)
+    const apiMessages = [];
+    for (const msg of filtered) {
+      if (apiMessages.length > 0 && apiMessages[apiMessages.length - 1].role === msg.role) {
+        apiMessages[apiMessages.length - 1].content += '\n\n' + msg.content;
+      } else {
+        apiMessages.push({ ...msg });
+      }
+    }
 
     try {
       const response = await fetch('/api/chat', {
