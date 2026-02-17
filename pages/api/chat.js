@@ -61,7 +61,7 @@ export default async function handler(req, res) {
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
+        model: 'claude-sonnet-4-5-20250929',
         max_tokens: 1000,
         system: SYSTEM_PROMPT,
         messages
@@ -86,7 +86,11 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: data.error.message });
     }
 
-    const assistantMessage = data.content?.[0]?.text || "I'm having trouble responding. Please try again.";
+    const assistantMessage = data.content?.[0]?.text;
+    if (!assistantMessage) {
+      console.error('Unexpected API response:', JSON.stringify(data));
+      return res.status(502).json({ error: 'Empty response from AI. Please try again.' });
+    }
     return res.status(200).json({ message: assistantMessage });
   } catch (error) {
     console.error('API Error:', error);
