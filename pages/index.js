@@ -270,7 +270,7 @@ export default function Home() {
           borderBottom: '1px solid #E5E5E5',
           backgroundColor: '#F5F0E8'
         }}>
-          <div style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div className="header-inner" style={{ maxWidth: '48rem', margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <div>
               <h1 style={{
                 fontSize: '1.5rem',
@@ -330,7 +330,7 @@ export default function Home() {
                   marginBottom: '1.5rem'
                 }}
               >
-                <div style={{
+                <div className="message-bubble" style={{
                   maxWidth: '85%',
                   borderRadius: '1rem',
                   padding: '1rem 1.25rem',
@@ -416,8 +416,9 @@ export default function Home() {
         <footer style={{
           padding: '1.25rem 1.5rem',
           paddingBottom: 'calc(1.25rem + env(safe-area-inset-bottom))',
-          borderTop: '1px solid #E5E5E5',
-          backgroundColor: '#F5F0E8'
+          borderTop: '1px solid #D5CFC5',
+          backgroundColor: '#F5F0E8',
+          boxShadow: '0 -2px 8px rgba(0,0,0,0.04)'
         }}>
           <div style={{ maxWidth: '48rem', margin: '0 auto' }}>
             <div style={{ display: 'flex', gap: '0.75rem' }}>
@@ -486,8 +487,12 @@ export default function Home() {
             }
           }
           @media (max-width: 600px) {
-            main { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
-            header, footer { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+            main { padding: 1.25rem 0.75rem !important; }
+            header { padding: 0.875rem 0.75rem !important; }
+            footer { padding: 0.75rem !important; }
+            .header-inner { flex-wrap: wrap; gap: 0.5rem; }
+            .header-inner h1 { font-size: 1.25rem !important; }
+            .message-bubble { max-width: 92% !important; }
           }
         `}</style>
       </div>
