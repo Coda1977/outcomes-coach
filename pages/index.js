@@ -2,36 +2,84 @@
 import Head from 'next/head';
 
 export default function Home() {
+  const nextIdRef = useRef(1);
+  const createId = () => {
+    const id = `msg-${nextIdRef.current}`;
+    nextIdRef.current += 1;
+    return id;
+  };
+
   const [messages, setMessages] = useState([
     {
+      id: createId(),
       role: 'assistant',
       content: "Welcome! I'm here to help you define clear outcomes for your team members.\n\nLet's start simple: **Who are you trying to define outcomes for?** Tell me the role or person's name and what they do."
     }
   ]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [copiedId, setCopiedId] = useState(null);
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  const messagesRef = useRef(messages);
+  const pendingQueueRef = useRef([]);
+  const isSendingRef = useRef(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || isLoading) return;
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
-    const userMessage = { role: 'user', content: input.trim() };
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
-    setInput('');
+  useEffect(() => {
+    if (!isLoading) {
+      inputRef.current?.focus();
+    }
+  }, [isLoading]);
+
+  const insertMessageAfterId = (targetId, message) => {
+    setMessages(prev => {
+      const index = prev.findIndex(m => m.id === targetId);
+      if (index === -1) {
+        const next = [...prev, message];
+        messagesRef.current = next;
+        return next;
+      }
+      const next = [...prev];
+      next.splice(index + 1, 0, message);
+      messagesRef.current = next;
+      return next;
+    });
+  };
+
+  const appendMessage = (message) => {
+    setMessages(prev => {
+      const next = [...prev, message];
+      messagesRef.current = next;
+      return next;
+    });
+  };
+
+  const processQueue = async () => {
+    if (isSendingRef.current) return;
+    const nextId = pendingQueueRef.current.shift();
+    if (!nextId) return;
+
+    isSendingRef.current = true;
     setIsLoading(true);
+
+    const snapshot = messagesRef.current;
+    const targetIndex = snapshot.findIndex(m => m.id === nextId);
+    const messagesForRequest = targetIndex === -1 ? snapshot : snapshot.slice(0, targetIndex + 1);
 
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          messages: newMessages.map(m => ({
+          messages: messagesForRequest.map(m => ({
             role: m.role,
             content: m.content
           }))
@@ -39,24 +87,45 @@ export default function Home() {
       });
 
       const data = await response.json();
-      
+
       if (data.error) {
-        setMessages(prev => [...prev, { 
-          role: 'assistant', 
-          content: "Something went wrong. Please try again." 
-        }]);
+        insertMessageAfterId(nextId, {
+          id: createId(),
+          role: 'assistant',
+          content: "Something went wrong. Please try again."
+        });
       } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: data.message }]);
+        insertMessageAfterId(nextId, {
+          id: createId(),
+          role: 'assistant',
+          content: data.message
+        });
       }
     } catch (error) {
-      setMessages(prev => [...prev, { 
-        role: 'assistant', 
-        content: "Something went wrong. Please try again." 
-      }]);
+      insertMessageAfterId(nextId, {
+        id: createId(),
+        role: 'assistant',
+        content: "Something went wrong. Please try again."
+      });
     } finally {
-      setIsLoading(false);
-      inputRef.current?.focus();
+      isSendingRef.current = false;
+      if (pendingQueueRef.current.length > 0) {
+        processQueue();
+      } else {
+        setIsLoading(false);
+      }
     }
+  };
+
+  const sendMessage = () => {
+    const trimmed = input.trim();
+    if (!trimmed) return;
+
+    const userMessage = { id: createId(), role: 'user', content: trimmed };
+    appendMessage(userMessage);
+    setInput('');
+    pendingQueueRef.current.push(userMessage.id);
+    processQueue();
   };
 
   const handleKeyDown = (e) => {
@@ -72,6 +141,30 @@ export default function Home() {
       formattedLine = formattedLine.replace(/\*(.*?)\*/g, '<em>$1</em>');
       return <p key={i} style={{ marginBottom: '0.5rem' }} dangerouslySetInnerHTML={{ __html: formattedLine || '\u00A0' }} />;
     });
+  };
+
+  const handleCopy = async (message) => {
+    const text = message.content;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textarea);
+      }
+      setCopiedId(message.id);
+      setTimeout(() => {
+        setCopiedId(prev => (prev === message.id ? null : prev));
+      }, 1500);
+    } catch (error) {
+      setCopiedId(null);
+    }
   };
 
   return (
@@ -124,7 +217,7 @@ export default function Home() {
           <div style={{ maxWidth: '48rem', margin: '0 auto' }}>
             {messages.map((message, index) => (
               <div
-                key={index}
+                key={message.id}
                 style={{
                   display: 'flex',
                   justifyContent: message.role === 'user' ? 'flex-end' : 'flex-start',
@@ -139,8 +232,28 @@ export default function Home() {
                   color: message.role === 'user' ? '#F5F0E8' : '#1A1A1A',
                   boxShadow: message.role === 'assistant' ? '0 2px 8px rgba(0,0,0,0.04)' : 'none'
                 }}>
-                  <div style={{ fontSize: '1rem', lineHeight: 1.6 }}>
-                    {formatMessage(message.content)}
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                    <div style={{ fontSize: '1rem', lineHeight: 1.6, flex: 1 }}>
+                      {formatMessage(message.content)}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(message)}
+                      style={{
+                        borderRadius: '9999px',
+                        border: '1px solid',
+                        borderColor: message.role === 'user' ? 'rgba(245,240,232,0.35)' : 'rgba(26,26,26,0.2)',
+                        backgroundColor: 'transparent',
+                        color: message.role === 'user' ? '#F5F0E8' : '#1A1A1A',
+                        fontSize: '0.75rem',
+                        padding: '0.25rem 0.5rem',
+                        cursor: 'pointer',
+                        opacity: 0.8,
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      {copiedId === message.id ? 'Copied' : 'Copy'}
+                    </button>
                   </div>
                 </div>
               </div>
@@ -191,7 +304,6 @@ export default function Home() {
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Describe the role or current goals..."
-                disabled={isLoading}
                 style={{
                   flex: 1,
                   padding: '1rem 1.25rem',
@@ -201,12 +313,12 @@ export default function Home() {
                   fontSize: '1rem',
                   color: '#1A1A1A',
                   outline: 'none',
-                  opacity: isLoading ? 0.5 : 1
+                  opacity: 1
                 }}
               />
               <button
                 onClick={sendMessage}
-                disabled={!input.trim() || isLoading}
+                disabled={!input.trim()}
                 style={{
                   padding: '1rem 2rem',
                   borderRadius: '9999px',
@@ -215,22 +327,14 @@ export default function Home() {
                   border: 'none',
                   fontWeight: 600,
                   fontSize: '1rem',
-                  cursor: !input.trim() || isLoading ? 'not-allowed' : 'pointer',
-                  opacity: !input.trim() || isLoading ? 0.4 : 1,
+                  cursor: !input.trim() ? 'not-allowed' : 'pointer',
+                  opacity: !input.trim() ? 0.4 : 1,
                   transition: 'transform 0.2s, opacity 0.2s'
                 }}
               >
                 Send
               </button>
             </div>
-            <p style={{
-              textAlign: 'center',
-              fontSize: '0.75rem',
-              marginTop: '1rem',
-              color: '#4A4A4A'
-            }}>
-              Based on Marcus Buckingham's outcomes framework
-            </p>
           </div>
         </footer>
 
