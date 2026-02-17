@@ -146,7 +146,10 @@ export default function Home() {
     try {
       const response = await fetch('/api/chat?stream=1', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'text/event-stream'
+        },
         body: JSON.stringify({
           stream: true,
           messages: messagesForRequest.map(m => ({

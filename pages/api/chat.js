@@ -139,6 +139,13 @@ export default async function handler(req, res) {
       } catch (error) {
         // Ignore parsing errors.
       }
+
+      if (wantsStream) {
+        setupSse(res);
+        sendSse(res, { type: 'error', message: errorMessage });
+        return res.end();
+      }
+
       return res.status(response.status).json({ error: errorMessage });
     }
 
@@ -150,6 +157,31 @@ export default async function handler(req, res) {
 
       const assistantMessage = data.content?.[0]?.text || "I'm having trouble responding. Please try again.";
       return res.status(200).json({ message: assistantMessage });
+    }
+
+    const contentType = response.headers.get('content-type') || '';
+    if (!contentType.includes('text/event-stream')) {
+      let assistantMessage = "I'm having trouble responding. Please try again.";
+      let errorMessage = null;
+      try {
+        const data = await response.json();
+        if (data.error) {
+          errorMessage = data.error.message || 'Failed to get response.';
+        } else {
+          assistantMessage = data.content?.[0]?.text || data.message || assistantMessage;
+        }
+      } catch (error) {
+        errorMessage = 'Failed to get response.';
+      }
+
+      setupSse(res);
+      if (errorMessage) {
+        sendSse(res, { type: 'error', message: errorMessage });
+      } else {
+        sendSse(res, { type: 'delta', text: assistantMessage });
+        sendSse(res, { type: 'done' });
+      }
+      return res.end();
     }
 
     setupSse(res);
