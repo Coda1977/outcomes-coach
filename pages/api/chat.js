@@ -1,4 +1,6 @@
-﻿const SYSTEM_PROMPT = `You are an expert coach helping managers define the right outcomes for their team members, based on Marcus Buckingham's methodology.
+import Anthropic from '@anthropic-ai/sdk';
+
+const SYSTEM_PROMPT = `You are an expert coach helping managers define the right outcomes for their team members, based on Marcus Buckingham's methodology.
 
 CORE PRINCIPLES YOU TEACH:
 - An outcome is the END RESULT, not the activity. Test: if you removed the person and the result still existed in the world, that's an outcome.
@@ -33,19 +35,17 @@ YOUR COACHING STYLE:
 
 Start by asking what role or person they're trying to define outcomes for.`;
 
+const client = new Anthropic();
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  if (!process.env.ANTHROPIC_API_KEY) {
-    return res.status(500).json({ error: 'Missing ANTHROPIC_API_KEY' });
-  }
-
   const messages = Array.isArray(req.body?.messages)
     ? req.body.messages
-        .filter(message => message && message.role && typeof message.content === 'string')
-        .map(message => ({ role: message.role, content: message.content }))
+        .filter(m => m && m.role && typeof m.content === 'string')
+        .map(m => ({ role: m.role, content: m.content }))
     : [];
 
   if (messages.length === 0) {
@@ -53,47 +53,24 @@ export default async function handler(req, res) {
   }
 
   try {
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': process.env.ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01'
-      },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-5-20250929',
-        max_tokens: 1000,
-        system: SYSTEM_PROMPT,
-        messages
-      })
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-5-20250929',
+      max_tokens: 1000,
+      system: SYSTEM_PROMPT,
+      messages
     });
 
-    if (!response.ok) {
-      let errorMessage = 'Failed to get response.';
-      try {
-        const errorBody = await response.json();
-        if (errorBody?.error?.message) {
-          errorMessage = errorBody.error.message;
-        }
-      } catch (error) {
-        // Ignore parsing errors.
-      }
-      return res.status(response.status).json({ error: errorMessage });
-    }
-
-    const data = await response.json();
-    if (data.error) {
-      return res.status(400).json({ error: data.error.message });
-    }
-
-    const assistantMessage = data.content?.[0]?.text;
-    if (!assistantMessage) {
-      console.error('Unexpected API response:', JSON.stringify(data));
+    const text = response.content?.[0]?.text;
+    if (!text) {
+      console.error('Unexpected API response:', JSON.stringify(response));
       return res.status(502).json({ error: 'Empty response from AI. Please try again.' });
     }
-    return res.status(200).json({ message: assistantMessage });
+
+    return res.status(200).json({ message: text });
   } catch (error) {
-    console.error('API Error:', error);
-    return res.status(500).json({ error: 'Failed to get response' });
+    console.error('Anthropic API error:', error.status, error.message);
+    const status = error.status || 500;
+    const message = error.message || 'Failed to get response';
+    return res.status(status).json({ error: message });
   }
 }
