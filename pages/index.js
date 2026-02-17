@@ -115,16 +115,6 @@ export default function Home() {
     });
   };
 
-  const updateMessageContent = (messageId, content) => {
-    setMessages(prev => {
-      const next = prev.map(message => (
-        message.id === messageId ? { ...message, content } : message
-      ));
-      messagesRef.current = next;
-      return next;
-    });
-  };
-
   const processQueue = async () => {
     if (isSendingRef.current) return;
     const nextId = pendingQueueRef.current.shift();
@@ -136,22 +126,12 @@ export default function Home() {
     const snapshot = messagesRef.current;
     const targetIndex = snapshot.findIndex(m => m.id === nextId);
     const messagesForRequest = targetIndex === -1 ? snapshot : snapshot.slice(0, targetIndex + 1);
-    const assistantId = createId();
-    insertMessageAfterId(nextId, {
-      id: assistantId,
-      role: 'assistant',
-      content: '...'
-    });
 
     try {
-      const response = await fetch('/api/chat?stream=1', {
+      const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Accept': 'text/event-stream'
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          stream: true,
           messages: messagesForRequest.map(m => ({
             role: m.role,
             content: m.content
@@ -159,76 +139,27 @@ export default function Home() {
         })
       });
 
-      if (!response.ok) {
-        let errorMessage = 'Something went wrong. Please try again.';
-        try {
-          const data = await response.json();
-          if (data?.error) errorMessage = data.error;
-        } catch (error) {
-          // Ignore JSON parsing errors.
-        }
-        updateMessageContent(assistantId, errorMessage);
-        return;
-      }
+      const data = await response.json();
 
-      if (!response.body) {
-        const data = await response.json();
-        if (data.error) {
-          updateMessageContent(assistantId, data.error);
-        } else {
-          updateMessageContent(assistantId, data.message);
-        }
-        return;
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let assistantText = '';
-      let hasStreamedText = false;
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const parts = buffer.split('\n\n');
-        buffer = parts.pop() || '';
-
-        parts.forEach(part => {
-          const lines = part.split('\n');
-          lines.forEach(line => {
-            const trimmed = line.trim();
-            if (!trimmed.startsWith('data:')) return;
-            const data = trimmed.replace(/^data:\s*/, '');
-            if (!data || data === '[DONE]') return;
-
-            try {
-              const payload = JSON.parse(data);
-              if (payload.type === 'delta' && typeof payload.text === 'string') {
-                if (!hasStreamedText) {
-                  assistantText = payload.text;
-                  hasStreamedText = true;
-                } else {
-                  assistantText += payload.text;
-                }
-                updateMessageContent(assistantId, assistantText);
-              }
-
-              if (payload.type === 'error' && typeof payload.message === 'string') {
-                updateMessageContent(assistantId, payload.message);
-              }
-            } catch (error) {
-              // Ignore malformed events.
-            }
-          });
+      if (!response.ok || data.error) {
+        insertMessageAfterId(nextId, {
+          id: createId(),
+          role: 'assistant',
+          content: data?.error || "Something went wrong. Please try again."
+        });
+      } else {
+        insertMessageAfterId(nextId, {
+          id: createId(),
+          role: 'assistant',
+          content: data.message
         });
       }
-
-      if (!hasStreamedText) {
-        updateMessageContent(assistantId, "I'm having trouble responding. Please try again.");
-      }
     } catch (error) {
-      updateMessageContent(assistantId, "Something went wrong. Please try again.");
+      insertMessageAfterId(nextId, {
+        id: createId(),
+        role: 'assistant',
+        content: "Something went wrong. Please try again."
+      });
     } finally {
       isSendingRef.current = false;
       if (pendingQueueRef.current.length > 0) {
