@@ -343,34 +343,40 @@ export default function Home() {
                   boxShadow: message.role === 'assistant' ? '0 2px 8px rgba(0,0,0,0.04)' : 'none',
                   border: message.isError ? '1px solid #FECACA' : 'none'
                 }}>
-                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
-                    <div style={{ fontSize: '1rem', lineHeight: 1.6, flex: 1 }}>
+                  {message.role === 'assistant' ? (
+                    <div>
+                      <div style={{ fontSize: '1rem', lineHeight: 1.6 }}>
+                        {formatMessage(message.content)}
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '0.5rem' }}>
+                        <button
+                          type="button"
+                          onClick={() => handleCopy(message)}
+                          style={{
+                            borderRadius: '9999px',
+                            border: '1px solid',
+                            borderColor: message.isError
+                              ? 'rgba(220,38,38,0.3)'
+                              : 'rgba(26,26,26,0.2)',
+                            backgroundColor: 'transparent',
+                            color: message.isError ? '#DC2626' : '#1A1A1A',
+                            fontSize: '0.75rem',
+                            padding: '0.4rem 0.75rem',
+                            cursor: 'pointer',
+                            opacity: 0.8,
+                            whiteSpace: 'nowrap',
+                            touchAction: 'manipulation'
+                          }}
+                        >
+                          {copiedId === message.id ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '1rem', lineHeight: 1.6 }}>
                       {formatMessage(message.content)}
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => handleCopy(message)}
-                      style={{
-                        borderRadius: '9999px',
-                        border: '1px solid',
-                        borderColor: message.isError
-                          ? 'rgba(220,38,38,0.3)'
-                          : message.role === 'user' ? 'rgba(245,240,232,0.35)' : 'rgba(26,26,26,0.2)',
-                        backgroundColor: 'transparent',
-                        color: message.isError
-                          ? '#DC2626'
-                          : message.role === 'user' ? '#F5F0E8' : '#1A1A1A',
-                        fontSize: '0.75rem',
-                        padding: '0.4rem 0.75rem',
-                        cursor: 'pointer',
-                        opacity: 0.8,
-                        whiteSpace: 'nowrap',
-                        touchAction: 'manipulation'
-                      }}
-                    >
-                      {copiedId === message.id ? 'Copied' : 'Copy'}
-                    </button>
-                  </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -444,7 +450,7 @@ export default function Home() {
                 onClick={sendMessage}
                 disabled={!input.trim()}
                 style={{
-                  padding: '1rem 2rem',
+                  padding: '1rem 1.25rem',
                   borderRadius: '9999px',
                   backgroundColor: '#1A1A1A',
                   color: '#F5F0E8',
@@ -478,6 +484,10 @@ export default function Home() {
             30% {
               transform: translateY(-4px);
             }
+          }
+          @media (max-width: 600px) {
+            main { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
+            header, footer { padding-left: 0.75rem !important; padding-right: 0.75rem !important; }
           }
         `}</style>
       </div>
